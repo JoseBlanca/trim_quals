@@ -13,17 +13,17 @@ fn get_file_format(hst_format: u32) -> Result<Format, String> {
     }
 }
 
-fn reduce_qualities(record: &mut Record, num_bases: usize, qual_reduction: u8) {
+fn reduce_qualities(record: &mut Record, num_bases: &usize, qual_reduction: &u8) {
     let mut qual = record.qual().to_vec();
 
     let seq_len = qual.len() as usize;
-    for i in 0..num_bases {
+    for i in 0..*num_bases {
         if i >= seq_len {
             continue;
         };
         let q = qual[i];
         let q_reduced: u8;
-        if q >= qual_reduction {
+        if q >= *qual_reduction {
             q_reduced = q - qual_reduction;
         } else {
             q_reduced = 0;
@@ -40,7 +40,7 @@ fn reduce_qualities(record: &mut Record, num_bases: usize, qual_reduction: u8) {
         let pos_from_end = seq_len - i;
         let q = qual[pos_from_end];
         let q_reduced: u8;
-        if q >= qual_reduction {
+        if q >= *qual_reduction {
             q_reduced = q - qual_reduction;
         } else {
             q_reduced = 0;
@@ -54,14 +54,16 @@ fn reduce_qualities(record: &mut Record, num_bases: usize, qual_reduction: u8) {
     record.set(&qname, Some(&cigar), &mut seq, &qual);
 }
 
-fn reduce_quality(input_bam: &str, output_bam: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn reduce_quality(
+    input_bam: &str,
+    output_bam: &str,
+    num_bases: &usize,
+    qual_reduction: &u8,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut reader = match input_bam {
         "-" => bam::Reader::from_stdin()?,
         _ => bam::Reader::from_path(input_bam)?,
     };
-
-    let num_bases: usize = 3;
-    let qual_reduction: u8 = 20;
 
     let hst_format: htsFormat;
     unsafe {
@@ -105,9 +107,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let input_bam = &args[1];
     let output_bam = &args[2];
+    let num_bases: usize = 3;
+    let qual_reduction: u8 = 20;
 
     // Call the quality reduction function
-    reduce_quality(input_bam, output_bam)?;
+    reduce_quality(input_bam, output_bam, &num_bases, &qual_reduction)?;
 
     Ok(())
 }
