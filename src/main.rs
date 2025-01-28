@@ -1,15 +1,35 @@
-use rust_htslib::{bam, bam::Format, bam::Header, bam::Read, bam::Record, bam::Writer};
+use rust_htslib::{
+    bam::{self, Format, Header, Read, Record},
+    htslib::htsFormat,
+};
+
+fn get_file_format(hst_format: u32) -> Result<Format, String> {
+    // formats (taken from htslib/hts.h enum htsExactFormat)
+    match hst_format {
+        3 => Ok(Format::Sam),
+        4 => Ok(Format::Bam),
+        6 => Ok(Format::Cram),
+        _ => Err("Input file is not recognized as Sam, Bam or Cram".to_string()),
+    }
+}
 
 fn reduce_quality(input_bam: &str) -> Result<(), Box<dyn std::error::Error>> {
     let mut reader = bam::Reader::from_path(input_bam)?;
     //let mut reader = bam::Reader::from_stdin()?;
 
+    let hst_format: htsFormat;
+    unsafe {
+        hst_format = (*reader.htsfile()).format;
+    }
+    // category 1 means sequence data
+    if hst_format.category != 1 {
+        return Err("The file is not recognized as sequence data".into());
+    }
+    let format = get_file_format(hst_format.format)?;
+
     let header_view = reader.header();
     let header = Header::from_template(header_view);
 
-    // Open the output BAM file
-    let format = Format::Cram;
-    let format = Format::Sam;
     //let mut writer = bam::Writer::from_path(output_bam, &header)?;
     let mut writer = bam::Writer::from_stdout(&header, format)?;
 
