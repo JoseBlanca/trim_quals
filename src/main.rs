@@ -52,7 +52,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse command-line arguments
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 3 {
-        eprintln!("Usage: {} <input.bam>", args[0]);
+        eprintln!("Usage: {} <input.bam> <output.bam>", args[0]);
         std::process::exit(1);
     }
 
