@@ -13,11 +13,55 @@ fn get_file_format(hst_format: u32) -> Result<Format, String> {
     }
 }
 
+fn reduce_qualities(record: &mut Record, num_bases: usize, qual_reduction: u8) {
+    let mut qual = record.qual().to_vec();
+
+    let seq_len = qual.len() as usize;
+    for i in 0..num_bases {
+        if i >= seq_len {
+            continue;
+        };
+        let q = qual[i];
+        let q_reduced: u8;
+        if q >= qual_reduction {
+            q_reduced = q - qual_reduction;
+        } else {
+            q_reduced = 0;
+        }
+        qual[i] = q_reduced;
+
+        let i = i + 1;
+        if i > seq_len {
+            continue;
+        }
+        if seq_len - i <= i {
+            continue;
+        }
+        let pos_from_end = seq_len - i;
+        let q = qual[pos_from_end];
+        let q_reduced: u8;
+        if q >= qual_reduction {
+            q_reduced = q - qual_reduction;
+        } else {
+            q_reduced = 0;
+        }
+        qual[pos_from_end] = q_reduced;
+    }
+
+    let cigar = record.cigar().take();
+    let mut seq = record.seq().as_bytes();
+    let qname = record.qname().to_owned();
+    record.set(&qname, Some(&cigar), &mut seq, &qual);
+}
+
 fn reduce_quality(input_bam: &str, output_bam: &str) -> Result<(), Box<dyn std::error::Error>> {
     let mut reader = match input_bam {
         "-" => bam::Reader::from_stdin()?,
         _ => bam::Reader::from_path(input_bam)?,
     };
+
+    let num_bases: usize = 3;
+    let qual_reduction: u8 = 20;
 
     let hst_format: htsFormat;
     unsafe {
@@ -41,6 +85,9 @@ fn reduce_quality(input_bam: &str, output_bam: &str) -> Result<(), Box<dyn std::
     let mut record = Record::new();
     while let Some(r) = reader.read(&mut record) {
         r.expect("Failed to parse record");
+
+        reduce_qualities(&mut record, num_bases, qual_reduction);
+
         // Write the modified record to the output BAM file
         writer.write(&record)?;
     }
