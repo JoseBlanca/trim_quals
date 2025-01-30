@@ -13,40 +13,37 @@ fn get_file_format(hst_format: u32) -> Result<Format, String> {
     }
 }
 
+fn reduce_single_qual(q: u8, qual_reduction: &u8) -> u8 {
+    let q_reduced: u8;
+    if q >= *qual_reduction {
+        q_reduced = q - qual_reduction;
+    } else {
+        q_reduced = 0;
+    }
+    q_reduced
+}
+
+fn reduce_qualities_in_edges(mut qual: Vec<u8>, num_bases: &usize, qual_reduction: &u8) -> Vec<u8> {
+    let seq_len = qual.len() as usize;
+    for pos in 0..*num_bases {
+        if pos >= seq_len {
+            continue;
+        };
+        qual[pos] = reduce_single_qual(qual[pos], qual_reduction);
+
+        let pos_from_end = seq_len - pos - 1;
+        if pos_from_end < *num_bases {
+            continue;
+        }
+        qual[pos_from_end] = reduce_single_qual(qual[pos_from_end], qual_reduction);
+    }
+    qual
+}
+
 fn reduce_qualities_in_read(record: &mut Record, num_bases: &usize, qual_reduction: &u8) {
     let mut qual = record.qual().to_vec();
 
-    let seq_len = qual.len() as usize;
-    for i in 0..*num_bases {
-        if i >= seq_len {
-            continue;
-        };
-        let q = qual[i];
-        let q_reduced: u8;
-        if q >= *qual_reduction {
-            q_reduced = q - qual_reduction;
-        } else {
-            q_reduced = 0;
-        }
-        qual[i] = q_reduced;
-
-        let i = i + 1;
-        if i > seq_len {
-            continue;
-        }
-        if seq_len - i <= i {
-            continue;
-        }
-        let pos_from_end = seq_len - i;
-        let q = qual[pos_from_end];
-        let q_reduced: u8;
-        if q >= *qual_reduction {
-            q_reduced = q - qual_reduction;
-        } else {
-            q_reduced = 0;
-        }
-        qual[pos_from_end] = q_reduced;
-    }
+    qual = reduce_qualities_in_edges(qual, num_bases, qual_reduction);
 
     let cigar = record.cigar().take();
     let mut seq = record.seq().as_bytes();
@@ -114,4 +111,69 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     trim_qualities_from_edges_in_bam(input_bam, output_bam, &num_bases, &qual_reduction)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_reduce_qualities_in_edges() {
+        let qual = vec![30, 25, 20, 15, 10, 5];
+        let num_bases = 2;
+        let qual_reduction = 5;
+        let expected = vec![25, 20, 20, 15, 5, 0];
+        let result = reduce_qualities_in_edges(qual, &num_bases, &qual_reduction);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_reduce_qualities_in_edges_no_reduction() {
+        let qual = vec![30, 25, 20, 15, 10, 5];
+        let num_bases = 2;
+        let qual_reduction = 0;
+        let expected = vec![30, 25, 20, 15, 10, 5];
+        let result = reduce_qualities_in_edges(qual, &num_bases, &qual_reduction);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_reduce_qualities_in_edges_full_reduction() {
+        let qual = vec![30, 25, 20, 15, 10, 5];
+        let num_bases = 3;
+        let qual_reduction = 40;
+        let expected = vec![0, 0, 0, 0, 0, 0];
+        let result = reduce_qualities_in_edges(qual, &num_bases, &qual_reduction);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_reduce_qualities_in_overlaping_edges() {
+        let qual = vec![30, 25, 20, 15, 10, 5];
+        let num_bases = 4;
+        let qual_reduction = 10;
+        let expected = vec![20, 15, 10, 5, 0, 0];
+        let result = reduce_qualities_in_edges(qual, &num_bases, &qual_reduction);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_reduce_qualities_in_edges_empty_qual() {
+        let qual = vec![];
+        let num_bases = 2;
+        let qual_reduction = 5;
+        let expected = vec![];
+        let result = reduce_qualities_in_edges(qual, &num_bases, &qual_reduction);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_reduce_qualities_in_edges_num_bases_exceeds_length() {
+        let qual = vec![30, 25, 20];
+        let num_bases = 4;
+        let qual_reduction = 10;
+        let expected = vec![20, 15, 10];
+        let result = reduce_qualities_in_edges(qual, &num_bases, &qual_reduction);
+        assert_eq!(result, expected);
+    }
 }
