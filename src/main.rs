@@ -1,3 +1,4 @@
+use clap::Parser;
 use rust_htslib::{
     bam::{self, Format, Header, Read, Record},
     htslib::htsFormat,
@@ -94,18 +95,37 @@ fn trim_qualities_from_edges_in_bam(
     Ok(())
 }
 
+#[derive(Parser)]
+#[command(
+    name = "trim_quals",
+    version = "0.1",
+    about = "Reduce the qualities of the bases located in the edges"
+)]
+struct Cli {
+    /// Input file path (default: "-" (stdin))
+    #[arg(default_value = "-")]
+    input_bam: String,
+
+    /// output file path (default: "-" (stdout))
+    #[arg(default_value = "-")]
+    output_bam: String,
+
+    /// number of bases to process from edges (default: 3)
+    #[arg(long, default_value_t = 3)]
+    num_bases: usize,
+
+    /// quality reduction factor (default: 20)
+    #[arg(long, default_value_t = 20)]
+    qual_reduction: u8,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse command-line arguments
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() != 3 {
-        eprintln!("Usage: {} <input.bam> <output.bam>", args[0]);
-        std::process::exit(1);
-    }
-
-    let input_bam = &args[1];
-    let output_bam = &args[2];
-    let num_bases: usize = 3;
-    let qual_reduction: u8 = 20;
+    let args = Cli::parse();
+    let input_bam = &args.input_bam;
+    let output_bam = &args.output_bam;
+    let num_bases: usize = args.num_bases;
+    let qual_reduction: u8 = args.qual_reduction;
 
     // Call the quality reduction function
     trim_qualities_from_edges_in_bam(input_bam, output_bam, &num_bases, &qual_reduction)?;
