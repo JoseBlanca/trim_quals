@@ -13,7 +13,7 @@ fn get_file_format(hst_format: u32) -> Result<Format, String> {
     }
 }
 
-fn reduce_qualities(record: &mut Record, num_bases: &usize, qual_reduction: &u8) {
+fn reduce_qualities_in_read(record: &mut Record, num_bases: &usize, qual_reduction: &u8) {
     let mut qual = record.qual().to_vec();
 
     let seq_len = qual.len() as usize;
@@ -54,7 +54,7 @@ fn reduce_qualities(record: &mut Record, num_bases: &usize, qual_reduction: &u8)
     record.set(&qname, Some(&cigar), &mut seq, &qual);
 }
 
-fn reduce_quality(
+fn trim_qualities_from_edges_in_bam(
     input_bam: &str,
     output_bam: &str,
     num_bases: &usize,
@@ -88,7 +88,7 @@ fn reduce_quality(
     while let Some(r) = reader.read(&mut record) {
         r.expect("Failed to parse record");
 
-        reduce_qualities(&mut record, num_bases, qual_reduction);
+        reduce_qualities_in_read(&mut record, num_bases, qual_reduction);
 
         // Write the modified record to the output BAM file
         writer.write(&record)?;
@@ -111,7 +111,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let qual_reduction: u8 = 20;
 
     // Call the quality reduction function
-    reduce_quality(input_bam, output_bam, &num_bases, &qual_reduction)?;
+    trim_qualities_from_edges_in_bam(input_bam, output_bam, &num_bases, &qual_reduction)?;
 
     Ok(())
 }
