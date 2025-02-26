@@ -24,15 +24,26 @@ fn reduce_single_qual(q: u8, qual_reduction: &u8) -> u8 {
     q_reduced
 }
 
-fn reduce_qualities_in_edges(mut qual: Vec<u8>, num_bases: &usize, qual_reduction: &u8) -> Vec<u8> {
+fn reduce_qualities_in_edges(
+    mut qual: Vec<u8>,
+    num_bases: &usize,
+    qual_reduction: &u8,
+    leading_softclips: &usize,
+    trailing_softclips: &usize,
+) -> Vec<u8> {
     let seq_len = qual.len() as usize;
-    for pos in 0..*num_bases {
+
+    let num_bases_with_clip = *num_bases + leading_softclips;
+    for pos in 0..num_bases_with_clip {
         if pos >= seq_len {
             continue;
         };
         qual[pos] = reduce_single_qual(qual[pos], qual_reduction);
+    }
 
-        let pos_from_end = seq_len - pos - 1;
+    let num_bases_with_clip = *num_bases + *trailing_softclips;
+    for pos in 0..num_bases_with_clip {
+        let pos_from_end = seq_len.saturating_sub(pos + 1);
         if pos_from_end < *num_bases {
             continue;
         }
@@ -44,9 +55,19 @@ fn reduce_qualities_in_edges(mut qual: Vec<u8>, num_bases: &usize, qual_reductio
 fn reduce_qualities_in_read(record: &mut Record, num_bases: &usize, qual_reduction: &u8) {
     let mut qual = record.qual().to_vec();
 
-    qual = reduce_qualities_in_edges(qual, num_bases, qual_reduction);
+    let cigar_view = record.cigar();
+    let leadling_softclips = cigar_view.leading_softclips() as usize;
+    let trailing_softclips = cigar_view.trailing_softclips() as usize;
 
-    let cigar = record.cigar().take();
+    qual = reduce_qualities_in_edges(
+        qual,
+        num_bases,
+        qual_reduction,
+        &leadling_softclips,
+        &trailing_softclips,
+    );
+
+    let cigar = cigar_view.take();
     let mut seq = record.seq().as_bytes();
     let qname = record.qname().to_owned();
     record.set(&qname, Some(&cigar), &mut seq, &qual);
@@ -143,7 +164,7 @@ mod tests {
         let num_bases = 2;
         let qual_reduction = 5;
         let expected = vec![25, 20, 20, 15, 5, 0];
-        let result = reduce_qualities_in_edges(qual, &num_bases, &qual_reduction);
+        let result = reduce_qualities_in_edges(qual, &num_bases, &qual_reduction, &0, &0);
         assert_eq!(result, expected);
     }
 
@@ -153,7 +174,7 @@ mod tests {
         let num_bases = 2;
         let qual_reduction = 0;
         let expected = vec![30, 25, 20, 15, 10, 5];
-        let result = reduce_qualities_in_edges(qual, &num_bases, &qual_reduction);
+        let result = reduce_qualities_in_edges(qual, &num_bases, &qual_reduction, &0, &0);
         assert_eq!(result, expected);
     }
 
@@ -163,7 +184,7 @@ mod tests {
         let num_bases = 3;
         let qual_reduction = 40;
         let expected = vec![0, 0, 0, 0, 0, 0];
-        let result = reduce_qualities_in_edges(qual, &num_bases, &qual_reduction);
+        let result = reduce_qualities_in_edges(qual, &num_bases, &qual_reduction, &0, &0);
         assert_eq!(result, expected);
     }
 
@@ -173,7 +194,7 @@ mod tests {
         let num_bases = 4;
         let qual_reduction = 10;
         let expected = vec![20, 15, 10, 5, 0, 0];
-        let result = reduce_qualities_in_edges(qual, &num_bases, &qual_reduction);
+        let result = reduce_qualities_in_edges(qual, &num_bases, &qual_reduction, &0, &0);
         assert_eq!(result, expected);
     }
 
@@ -183,7 +204,7 @@ mod tests {
         let num_bases = 2;
         let qual_reduction = 5;
         let expected = vec![];
-        let result = reduce_qualities_in_edges(qual, &num_bases, &qual_reduction);
+        let result = reduce_qualities_in_edges(qual, &num_bases, &qual_reduction, &0, &0);
         assert_eq!(result, expected);
     }
 
@@ -193,7 +214,25 @@ mod tests {
         let num_bases = 4;
         let qual_reduction = 10;
         let expected = vec![20, 15, 10];
-        let result = reduce_qualities_in_edges(qual, &num_bases, &qual_reduction);
+        let result = reduce_qualities_in_edges(qual, &num_bases, &qual_reduction, &0, &0);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_reduce_qualities_in_edges_with_soft_clips() {
+        let qual = vec![30, 25, 20, 15, 10, 5];
+        let num_bases = 1;
+        let leading_softclips = 1;
+        let trailing_softclips = 2;
+        let qual_reduction = 5;
+        let expected = vec![25, 20, 20, 10, 5, 0];
+        let result = reduce_qualities_in_edges(
+            qual,
+            &num_bases,
+            &qual_reduction,
+            &leading_softclips,
+            &trailing_softclips,
+        );
         assert_eq!(result, expected);
     }
 }
