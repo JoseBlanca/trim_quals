@@ -119,7 +119,7 @@ fn trim_qualities_from_edges_in_bam(
 #[derive(Parser)]
 #[command(
     name = "trim_quals",
-    version = "0.1",
+    version = "0.1.1",
     about = "Reduce the qualities of the bases located in the edges"
 )]
 struct Cli {
